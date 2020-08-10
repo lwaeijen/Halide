@@ -271,12 +271,6 @@ void define_func(py::module &m) {
             .def("output_buffers", &Func::output_buffers)
 
             .def(
-                "infer_input_bounds", [](Func &f, const std::vector<int32_t> &sizes, const Target &target) -> void {
-                    f.infer_input_bounds(sizes, target);
-                },
-                py::arg("sizes"), py::arg("target") = get_jit_target_from_environment())
-
-            .def(
                 "infer_input_bounds", [](Func &f, int x_size, int y_size, int z_size, int w_size, const Target &target) -> void {
                     PyErr_WarnEx(PyExc_DeprecationWarning,
                                  "Call infer_input_bounds() with an explicit list of ints instead.",
@@ -291,14 +285,33 @@ void define_func(py::module &m) {
                 py::arg("x_size") = 0, py::arg("y_size") = 0, py::arg("z_size") = 0, py::arg("w_size") = 0, py::arg("target") = get_jit_target_from_environment())
 
             .def(
-                "infer_input_bounds", [](Func &f, Buffer<> buffer, const Target &target) -> void {
-                    f.infer_input_bounds(buffer, target);
-                },
-                py::arg("dst"), py::arg("target") = get_jit_target_from_environment())
+                "infer_input_bounds", [](Func &f, py::object dst, const Target &target) -> void {
+                    // dst could be Buffer<>, vector<Buffer>, or vector<int>
+                    try {
+                        Buffer<> b = dst.cast<Buffer<>>();
+                        f.infer_input_bounds(b, target);
+                        return;
+                    } catch (...) {
+                        // fall thru
+                    }
 
-            .def(
-                "infer_input_bounds", [](Func &f, std::vector<Buffer<>> buffer, const Target &target) -> void {
-                    f.infer_input_bounds(Realization(buffer));
+                    try {
+                        std::vector<Buffer<>> v = dst.cast<std::vector<Buffer<>>>();
+                        f.infer_input_bounds(Realization(v), target);
+                        return;
+                    } catch (...) {
+                        // fall thru
+                    }
+
+                    try {
+                        std::vector<int32_t> v = dst.cast<std::vector<int32_t>>();
+                        f.infer_input_bounds(v, target);
+                        return;
+                    } catch (...) {
+                        // fall thru
+                    }
+
+                    throw py::value_error("Invalid arguments to infer_input_bounds");
                 },
                 py::arg("dst"), py::arg("target") = get_jit_target_from_environment())
 
