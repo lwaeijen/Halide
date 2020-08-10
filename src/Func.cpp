@@ -3001,7 +3001,7 @@ void Func::infer_input_bounds(int x_size, int y_size, int z_size, int w_size,
     infer_input_bounds(sizes, target, param_map);
 }
 
-void Func::infer_input_bounds(std::vector<int32_t> sizes,
+void Func::infer_input_bounds(const std::vector<int32_t> &sizes,
                               const Target &target,
                               const ParamMap &param_map) {
     user_assert(defined()) << "Can't infer input bounds on an undefined Func.\n";

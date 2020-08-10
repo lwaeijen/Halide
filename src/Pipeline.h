@@ -498,7 +498,7 @@ public:
      * of the appropriate size and binding them to the unbound
      * ImageParams. */
     // @{
-    void infer_input_bounds(std::vector<int32_t> sizes,
+    void infer_input_bounds(const std::vector<int32_t> &sizes,
                             const Target &target = get_jit_target_from_environment(),
                             const ParamMap &param_map = ParamMap::empty_map());
     HALIDE_ATTRIBUTE_DEPRECATED("Call infer_input_bounds() with an explicit vector<int> instead")
