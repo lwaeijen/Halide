@@ -48,6 +48,45 @@ py::object realization_to_object(const Realization &r) {
 
 }  // namespace
 
+
+// Very hacky way to count loads and stores from/to buffers....
+// Only ever trace one object at a time, everything is global!
+
+int global_stores=0;
+int global_loads=0;
+int count_accesses(void *user_context, const halide_trace_event_t *e) {
+    static int id=0;
+    //std::cout << "Counting accesses, loads:" << global_loads << " stores:" << global_stores << std::endl;
+    if (e->event==0) {
+        //load
+        global_loads++;
+    } else {
+        //store
+        global_stores++;
+    }
+    return id++;
+}
+
+void register_count_accesses (Func &f) {
+    //std::cout << "Registering:" << f.name() << std::endl;
+    //reset counts on registering
+    global_stores=0;
+    global_loads=0;
+    f.set_custom_trace(&count_accesses);
+}
+
+int get_loads(Func &f){
+  //std::cout << "Getting loads for:" << f.name() << std::endl;
+  return global_loads;
+}
+
+int get_stores(Func &f){
+  //std::cout << "Getting stores for:" << f.name() << std::endl;
+  return global_stores;
+}
+
+
+
 void define_func(py::module &m) {
     define_func_ref(m);
     define_var_or_rvar(m);
@@ -227,6 +266,10 @@ void define_func(py::module &m) {
         }, py::arg("idx") = 0)
         .def("rvars", &Func::rvars, py::arg("idx") = 0)
 
+
+        .def("count_accesses", &register_count_accesses)
+        .def("get_loads", &get_loads)
+        .def("get_stores", &get_stores)
         .def("trace_loads", &Func::trace_loads)
         .def("trace_stores", &Func::trace_stores)
         .def("trace_realizations", &Func::trace_realizations)
