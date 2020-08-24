@@ -1,5 +1,4 @@
 #include "PyFunc.h"
-
 #include "PyBinaryOperators.h"
 #include "PyBuffer.h"
 #include "PyExpr.h"
@@ -9,6 +8,8 @@
 #include "PyStage.h"
 #include "PyTuple.h"
 #include "PyVarOrRVar.h"
+#include <string>
+#include <unordered_map>
 
 namespace Halide {
 namespace PythonBindings {
@@ -49,42 +50,98 @@ py::object realization_to_object(const Realization &r) {
 }  // namespace
 
 
-// Very hacky way to count loads and stores from/to buffers....
-// Only ever trace one object at a time, everything is global!
+// Typedef load and store counter struct
+typedef struct counters_t{
+    int stores;
+    int loads;
+}counters_t;
 
-int global_stores=0;
-int global_loads=0;
-int count_accesses(void *user_context, const halide_trace_event_t *e) {
-    static int id=0;
-    //std::cout << "Counting accesses, loads:" << global_loads << " stores:" << global_stores << std::endl;
-    if (e->event==0) {
-        //load
-        global_loads++;
-    } else {
-        //store
-        global_stores++;
-    }
-    return id++;
+// Create a global map of string -> counter struct
+std::unordered_map<std::string, counters_t> func2counters;
+
+inline void init_counter(const std::string name){
+     func2counters[name]={0,0};
 }
 
-void register_count_accesses (Func &f) {
-    //std::cout << "Registering:" << f.name() << std::endl;
-    //reset counts on registering
-    global_stores=0;
-    global_loads=0;
-    f.set_custom_trace(&count_accesses);
+inline void init_counter_ext(Func& f, const std::string name){
+    init_counter(name);
 }
 
-int get_loads(Func &f){
-  //std::cout << "Getting loads for:" << f.name() << std::endl;
-  return global_loads;
+inline void count_accesses_internal(int etype, const std::string name){
+
+  // Choose what to do based on event type
+  if(etype==0){
+    //load
+     func2counters[name].loads++;
+  }
+  else if(etype==1){
+    //store
+    func2counters[name].stores++;
+  }
+
+  //else, nothing:
+    //halide_trace_load = 0,
+    //halide_trace_store = 1,
+    //halide_trace_begin_realization = 2,
+    //halide_trace_end_realization = 3,
+    //halide_trace_produce = 4,
+    //halide_trace_end_produce = 5,
+    //halide_trace_consume = 6,
+    //halide_trace_end_consume = 7,
+    //halide_trace_begin_pipeline = 8,
+    //halide_trace_end_pipeline = 9,
+    //halide_trace_tag = 10
 }
 
-int get_stores(Func &f){
-  //std::cout << "Getting stores for:" << f.name() << std::endl;
-  return global_stores;
+int count_accesses_safe(void *user_context, const halide_trace_event_t *e) {
+  //not sure why this is required
+  static int id=0;
+
+  //init key if required
+  if(func2counters.find(e->func)==func2counters.end())
+    init_counter(e->func);
+
+  count_accesses_internal(e->event,  e->func);
+
+  return id++;
 }
 
+int count_accesses_unsafe(void *user_context, const halide_trace_event_t *e) {
+  static int id=0;
+
+  count_accesses_internal(e->event,  e->func);
+
+  return id++;
+}
+
+void register_count_accesses(Func &f) {
+    // Register custom trace function for this function
+    f.set_custom_trace(&count_accesses_safe);
+}
+
+void register_count_accesses_unsafe(Func &f) {
+    // Register custom trace function for this function
+    f.set_custom_trace(&count_accesses_unsafe);
+}
+
+int get_loads(Func &f, const std::string name){
+  if(func2counters.find(name)==func2counters.end())
+    return -1;
+  return func2counters[name].loads;
+}
+
+int get_stores(Func &f, const std::string name){
+  if(func2counters.find(name)==func2counters.end())
+    return -1;
+  return func2counters[name].stores;
+}
+
+void print_counters(Func &f){
+  for(auto& it: func2counters){
+    std::cout << it.first << " loads: " << it.second.loads << std::endl;
+    std::cout << it.first << " stores: " << it.second.stores << std::endl;
+  }
+}
 
 
 void define_func(py::module &m) {
@@ -267,9 +324,14 @@ void define_func(py::module &m) {
         .def("rvars", &Func::rvars, py::arg("idx") = 0)
 
 
-        .def("count_accesses", &register_count_accesses)
-        .def("get_loads", &get_loads)
-        .def("get_stores", &get_stores)
+        .def("get_loads", &get_loads)           // get loads for <buffer name>
+        .def("get_stores", &get_stores)         // get stores for <buffer name>
+        .def("print_counters", &print_counters) // print all counter values
+        .def("init_counter", &init_counter_ext) // initialize <buffer name> counters with zeros
+        .def("count_accesses", &register_count_accesses) //inits counters if not used yet
+        .def("count_accesses_unsafe", &register_count_accesses_unsafe)  //inits have to be done by user
+
+
         .def("trace_loads", &Func::trace_loads)
         .def("trace_stores", &Func::trace_stores)
         .def("trace_realizations", &Func::trace_realizations)
