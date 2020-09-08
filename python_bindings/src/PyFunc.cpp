@@ -10,6 +10,7 @@
 #include "PyVarOrRVar.h"
 #include <string>
 #include <unordered_map>
+#include <pybind11/functional.h>
 
 namespace Halide {
 namespace PythonBindings {
@@ -141,6 +142,59 @@ void print_counters(Func &f){
     std::cout << it.first << " loads: " << it.second.loads << std::endl;
     std::cout << it.first << " stores: " << it.second.stores << std::endl;
   }
+}
+
+
+// Create a global map of buffer name -> size
+std::unordered_map<std::string, int> mem_sizes;
+void collect_mem_stats(void *, const char *msg){
+    float ms;
+    int percentage;
+    int stack;
+    char name[64];
+
+    int val = sscanf(
+        msg,
+        " %[^:]: %fms (%d%%) stack: %d",
+        name,
+        &ms,
+        &percentage,
+        &stack
+    );
+    if(val==4)
+        mem_sizes[name] = stack;
+}
+
+void print_mem_stats(Func &f){
+  for(auto& it: mem_sizes){
+    std::cout << it.first << ": " << it.second << std::endl;
+  }
+}
+
+int get_mem_size(Func &f, const char* buf_name){
+  if(mem_sizes.find(buf_name)==mem_sizes.end())
+    return -1;
+  return mem_sizes[buf_name];
+}
+
+void trace_mem(Func &f){
+  f.set_custom_print(&collect_mem_stats);
+}
+
+//set global pointer to default print function
+std::function<void(const char*)> print_fn;
+
+// set custom print function
+void custom_print(void* ptr, const char* s){
+  //call global print function
+  print_fn(s);
+}
+void set_custom_print(Func &f, std::function<void(const char*)> &print){
+  // override global print function
+  print_fn = print;
+
+  //register wrapper with void*
+  f.set_custom_print(&custom_print);
 }
 
 
@@ -324,6 +378,11 @@ void define_func(py::module &m) {
         .def("rvars", &Func::rvars, py::arg("idx") = 0)
 
 
+        .def("trace_mem", &trace_mem) // trace memory sizes
+        .def("get_mem_size", &get_mem_size) // get size of buffer name
+        .def("print_mem_stats", &print_mem_stats) //print all traced memories
+
+        .def("set_custom_print", &set_custom_print) // set custom print functionk
         .def("get_loads", &get_loads)           // get loads for <buffer name>
         .def("get_stores", &get_stores)         // get stores for <buffer name>
         .def("print_counters", &print_counters) // print all counter values
