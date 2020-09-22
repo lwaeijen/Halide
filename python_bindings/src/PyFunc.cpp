@@ -144,25 +144,81 @@ void print_counters(Func &f){
   }
 }
 
-
 // Create a global map of buffer name -> size
 std::unordered_map<std::string, int> mem_sizes;
 void collect_mem_stats(void *, const char *msg){
     float ms;
     int percentage;
     int stack;
+    int peak;
+    int num;
+    int avg;
     char name[64];
 
-    int val = sscanf(
+    if(sscanf(
         msg,
         " %[^:]: %fms (%d%%) stack: %d",
         name,
         &ms,
         &percentage,
         &stack
-    );
-    if(val==4)
+    )==4){
         mem_sizes[name] = stack;
+        return;
+    }
+
+    if(sscanf(
+      msg,
+      " %[^:]: %fms (%d%%) peak: %d num: %d avg: %d",
+      name,
+      &ms,
+      &percentage,
+      &peak,
+      &num,
+      &avg
+    )==6){
+        mem_sizes[name] = peak;
+        return;
+    }
+
+    if(sscanf(
+      msg,
+      " %[^:]: %fms (%d%%) peak: %d num: %d avg: %d stack: %d",
+      name,
+      &ms,
+      &percentage,
+      &peak,
+      &num,
+      &avg,
+      &stack
+    )==7){
+        mem_sizes[name] = peak;
+        return;
+    }
+
+    if(sscanf(
+      msg,
+      " %[^:]: %fms (%d%%)",
+      name,
+      &ms,
+      &percentage
+    )==3){
+      //Silently ignore
+      return;
+    }
+
+    if(sscanf(
+      msg,
+      " %[^:]: %fms (%d%%)",
+      name,
+      &ms,
+      &percentage
+    )==3){
+      //Silently ignore
+      return;
+    }
+
+    //std::cout << "no match:" << msg;
 }
 
 void print_mem_stats(Func &f){
