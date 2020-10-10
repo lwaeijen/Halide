@@ -144,6 +144,10 @@ void print_counters(Func &f){
   }
 }
 
+void reset_counters(Func &f){
+    func2counters.clear();
+}
+
 // Create a global map of buffer name -> size
 std::unordered_map<std::string, int> mem_sizes;
 void collect_mem_stats(void *, const char *msg){
@@ -235,6 +239,15 @@ int get_mem_size(Func &f, const char* buf_name){
 
 void trace_mem(Func &f){
   f.set_custom_print(&collect_mem_stats);
+}
+
+void reset_mem_trace(Func &f){
+  mem_sizes.clear();
+}
+
+void reset_stats(Func &f){
+  reset_counters(f);
+  reset_mem_trace(f);
 }
 
 //set global pointer to default print function
@@ -437,6 +450,7 @@ void define_func(py::module &m) {
         .def("trace_mem", &trace_mem) // trace memory sizes
         .def("get_mem_size", &get_mem_size) // get size of buffer name
         .def("print_mem_stats", &print_mem_stats) //print all traced memories
+        .def("reset_traces", &reset_stats)
 
         .def("set_custom_print", &set_custom_print) // set custom print functionk
         .def("get_loads", &get_loads)           // get loads for <buffer name>
