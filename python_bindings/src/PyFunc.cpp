@@ -50,6 +50,13 @@ py::object realization_to_object(const Realization &r) {
 
 }  // namespace
 
+// Remove trailing $<int>
+std::string sanitize_name(std::string name){
+    std::size_t found = name.find('$');
+    if( found != std::string::npos)
+      return name.substr(0,found);
+    return name;
+}
 
 // Typedef load and store counter struct
 typedef struct counters_t{
@@ -61,11 +68,11 @@ typedef struct counters_t{
 std::unordered_map<std::string, counters_t> func2counters;
 
 inline void init_counter(const std::string name){
-     func2counters[name]={0,0};
+     func2counters[sanitize_name(name)]={0,0};
 }
 
 inline void init_counter_ext(Func& f, const std::string name){
-    init_counter(name);
+    init_counter(sanitize_name(name));
 }
 
 inline void count_accesses_internal(int etype, const std::string name){
@@ -73,11 +80,11 @@ inline void count_accesses_internal(int etype, const std::string name){
   // Choose what to do based on event type
   if(etype==0){
     //load
-     func2counters[name].loads++;
+     func2counters[sanitize_name(name)].loads++;
   }
   else if(etype==1){
     //store
-    func2counters[name].stores++;
+    func2counters[sanitize_name(name)].stores++;
   }
 
   //else, nothing:
@@ -167,7 +174,7 @@ void collect_mem_stats(void *, const char *msg){
         &percentage,
         &stack
     )==4){
-        mem_sizes[name] = stack;
+        mem_sizes[sanitize_name(name)] = stack;
         return;
     }
 
@@ -181,7 +188,7 @@ void collect_mem_stats(void *, const char *msg){
       &num,
       &avg
     )==6){
-        mem_sizes[name] = peak;
+        mem_sizes[sanitize_name(name)] = peak;
         return;
     }
 
@@ -196,7 +203,7 @@ void collect_mem_stats(void *, const char *msg){
       &avg,
       &stack
     )==7){
-        mem_sizes[name] = peak;
+        mem_sizes[sanitize_name(name)] = peak;
         return;
     }
 
@@ -258,6 +265,7 @@ void custom_print(void* ptr, const char* s){
   //call global print function
   print_fn(s);
 }
+
 void set_custom_print(Func &f, std::function<void(const char*)> &print){
   // override global print function
   print_fn = print;
